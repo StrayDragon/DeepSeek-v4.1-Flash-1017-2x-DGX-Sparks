@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fork merge of two still-open upstream pulls, onto upstream main `370daf0` (this fork was level with it; no rebase was
+  needed): [#40](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/40)
+  `zig/patches/0011-server-prepare-memory.patch` — rank 0's memory with several long prompts at once, its
+  `TENSORFOLD_PREPARE_FLOOR_GIB` gate on by default at 3 GiB — and [#9](https://github.com/MiaAI-Lab/DeepSeek-v4.1-Flash-1017-2x-DGX-Sparks/pull/9)
+  `zig/patches/0007-display-kv.patch` — `DISPLAY_KV_MIB` / `DISPLAY_KV_CARD`, off by default, headless GB10 only
+  (`DISPLAY_KV_MIB=1792` in `scripts/local.sh` turns it on). No patch was renumbered: `0007` and `0011` were free at this
+  base, and the apply order by filename (`zig/Dockerfile` globs them) is 0001, 0002, 0004, 0005, 0006, 0007-display-kv,
+  0008-pool-window, 0010-rdma-idle-nap, 0011-server-prepare-memory. On top of the two pulls, this fork wires
+  `TENSORFOLD_PREPARE_FLOOR_GIB` into the config layer: `scripts/config.sh` defaults it to 3 and exports it for the
+  `TENSORFOLD_*` pass-through (so `scripts/local.sh` can set it without an `export`), and `scripts/local.sh.example` and the
+  README's Configuration table document it.
 - Rank 0's memory with long prompts: `zig/patches/0011-server-prepare-memory.patch` (base engine: server and core). A
   prompt's render and tokenization kept their scratch in the request's memory until the reply ended: a resumed
   ~948K-token conversation held ~1.3-1.5 GB on rank 0, and eight at once took its MemAvailable from 6 GiB to 0.16 GiB

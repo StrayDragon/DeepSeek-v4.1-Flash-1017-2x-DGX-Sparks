@@ -319,6 +319,7 @@ Settings come from the environment, `scripts/local.sh` or `.env`; the defaults a
 | `MAX_TOKENS` | 32768 | a reply's budget when a request sets none |
 | `MIN_AVAIL_GIB`, `MIN_AVAIL_WAIT_S` | 112, 30 | `start.sh` refuses to start with less memory available than this on either Spark (`0` skips the check); it re-reads the memory for up to `MIN_AVAIL_WAIT_S` seconds first, because the page cache a build or a large copy just left counts as available only once it is written back (`0` reads once) |
 | `MEMGUARD_GIB`, `MEMGUARD_HOLD_S`, `MEMGUARD_HARD_GIB` | 2.5, 4, 1 | `scripts/memguard.sh` kills a rank's container when the memory available stays under the floor for `MEMGUARD_HOLD_S` seconds without coming back over it, or at once when it falls under the hard floor. A dip that recovers is logged and not killed (decimals fine; `MEMGUARD_GIB=0` turns the guard off) |
+| `TENSORFOLD_PREPARE_FLOOR_GIB` | 3 (the patch's own default) | `zig/patches/0011`'s prepare gate: while other prompts' prepares are still in flight, a prepare waits instead of taking `MemAvailable` under this floor (GiB, decimals fine; `0` turns the gate off — the scratch release and the kept-alive cap stay). It goes to both ranks through the `TENSORFOLD_*` pass-through; only rank 0's server prepares prompts. The engine refuses a negative or unparseable value when it starts |
 | `HEAD_ENGRAM_DIR` | empty | a local folder with Engram's two shards for rank 0 (as `WORKER_ENGRAM_DIR` is on the worker); empty reads them from `HF_CACHE` |
 | `DISPLAY_KV_MIB`, `DISPLAY_KV_CARD` | 0, `/dev/dri/card0` | `0`: off. Otherwise the MiB (whole steps of 16, at most 2032) of the framebuffer that a **headless** GB10 reserves (UEFI, about 1.75 GiB a GPU) to put the KV caches on, so those bytes leave `MemAvailable` (`zig/patches/0007`); both ranks take it, the containers get the card as a device. The tensors that fit go there, the rest stay on ordinary memory; the engine refuses a card with a connected display. See [Memory and safety](#memory-and-safety) |
 | `HEAD_NFS_SERVER`, `HEAD_NFS_VOLUME` | empty | rank 0 reads the checkpoint over NFS through a docker volume the docker daemon mounts (no root, survives a reboot); empty uses `HF_CACHE` as a host path. sshfs does not work: it lists files as type "unknown", which the engine skips |
@@ -367,6 +368,12 @@ answering and has to be power-cycled (this happened once, with the engine's rese
   hard floor; the long-prompt runs in Status used 2.5): a lower floor or a longer hold trades the kill for the risk of freezing the Spark. `ENGINE=jl` does check at run time: it refuses admissions under a 4 GiB hard floor, falls
   back to 2K prompt segments and runs a missing graph eagerly instead of capturing it ([docs/jl-engine.md](docs/jl-engine.md)); its boot check also sizes the pool to what the
   head can spare.
+- one way `MemAvailable` used to fall in a burst is fixed by `zig/patches/0011` (upstream pull request #40; **on by default**):
+  a long prompt's render and tokenization kept their scratch in the request's memory until the reply ended, so several long
+  prompts preparing at once took a head from 6 GiB available to 0.16 GiB — memguard killed the head while the worker was fine.
+  The scratch is now given back as each prepare finishes (~6 bytes a text byte instead of ~117, the same ids), a kept-alive
+  connection holds at most 1 MiB between its requests, and, while other prepares are still in flight, a prepare waits under
+  `TENSORFOLD_PREPARE_FLOOR_GIB` (3 GiB; `0` turns the gate off). Replies are unchanged (`zig build test-golden`).
 - the KV cache is small (compressed FP4 with block scales; about 0.5 GiB at 262,144 tokens and ~1.8 GiB at the full window,
   by two memory readings); it is sized from `CONTEXT` when the model loads and shared by the streams. Most of the
   memory is the weights (~99 GiB, of which ~3.5 GiB are the drafter's), so the head's other software decides what is left.

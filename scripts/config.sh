@@ -207,6 +207,13 @@ MIN_AVAIL_WAIT_S="${MIN_AVAIL_WAIT_S:-30}"
 MEMGUARD_GIB="${MEMGUARD_GIB:-2.5}"
 MEMGUARD_HOLD_S="${MEMGUARD_HOLD_S:-4}"
 MEMGUARD_HARD_GIB="${MEMGUARD_HARD_GIB:-1}"
+# zig/patches/0011 (upstream pull request #40): a prompt's render and tokenization give their scratch back, and a prepare
+# waits under a memory floor while other prepares are in flight, instead of taking the head's MemAvailable to zero (several
+# long prompts at once used to end in memguard's kill). TENSORFOLD_PREPARE_FLOOR_GIB is that floor in GiB: the patch's own
+# default is 3; 0 turns the gate off (the scratch release and the kept-alive cap stay). Exported here so start.sh's
+# TENSORFOLD_* pass-through carries it to both ranks; only rank 0's server prepares prompts, so only the head's floor
+# acts. Decimals are fine (2.5); the engine refuses a negative or unparseable value when it starts.
+export TENSORFOLD_PREPARE_FLOOR_GIB="${TENSORFOLD_PREPARE_FLOOR_GIB:-3}"
 
 # Colours only on a terminal.
 _c() { [[ -t "$1" ]] && printf '\033[%sm' "$2" || true; }

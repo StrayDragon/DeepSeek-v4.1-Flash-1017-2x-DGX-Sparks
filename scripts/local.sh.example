@@ -12,3 +12,4 @@ WORKER=user@192.0.2.2          # ssh target of the second Spark (key-based: ssh-
 # HF_TOKEN=hf_...              # HF read token (or use hf auth login on the head); never commit your token
 # ABLIT=1 requires access: https://huggingface.co/drowzeys/keys-DeepSeek-V4.1-Flash-1017-Abliterated
 # DISPLAY_KV_MIB=1792         # headless GB10 only: the KV caches on the framebuffer the UEFI reserves (zig/patches/0007; 0: off); DISPLAY_KV_CARD=/dev/dri/card0
+# TENSORFOLD_PREPARE_FLOOR_GIB=3   # zig/patches/0011: GiB of MemAvailable a prepare leaves while others are in flight (the patch's default is 3; 0 turns the gate off)
